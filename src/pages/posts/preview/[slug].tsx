@@ -1,10 +1,13 @@
 import Head from "next/head";
-import { getSession } from "next-auth/client";
-import { GetStaticProps } from "next";
+import { getSession, useSession } from "next-auth/client";
+import { GetStaticPaths, GetStaticProps } from "next";
 
 import { RichText } from "prismic-dom";
 import { getPrismicClient } from "../../../services/prismic";
 import styles from "../post.module.scss";
+import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/dist/client/router";
 
 interface PostPreviewProps {
   post: {
@@ -16,6 +19,14 @@ interface PostPreviewProps {
 }
 
 export default function PostPreview({ post }: PostPreviewProps) {
+  const [session] = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (session?.activeSubscription) {
+      router.push(`/posts/${post.slug} `);
+    }
+  }, [session]);
   return (
     <>
       <Head>
@@ -27,17 +38,32 @@ export default function PostPreview({ post }: PostPreviewProps) {
           <h1>{post.title}</h1>
           <time>{post.updatedAt}</time>
           <div
-            className={styles.postContent}
+            className={` ${styles.postContent} ${styles.previewContent}`}
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
+          <div className={styles.continueReading}>
+            Wanna continue reading?
+            <Link href="/">
+              <a href="">Subscribe now 🤗</a>
+            </Link>
+          </div>
         </article>
       </main>
     </>
   );
 }
-export const getStaticPaths = () => {
-  return { props}
-}
+export const getStaticPaths: GetStaticPaths = async () => {
+  return {
+    paths: [
+      {
+        params: {
+          slug: "how-to-deal-with-annoying-neighbors-without-creating",
+        },
+      },
+    ],
+    fallback: "blocking",
+  };
+};
 export const getStaticProps: GetStaticProps = async ({ params }) => {
   const { slug } = params;
 
@@ -48,7 +74,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
   const post = {
     slug,
     title: RichText.asText(response.data.title),
-    content: RichText.asHtml(response.data.content),
+    content: RichText.asHtml(response.data.content.splice(0, 3)),
     updatedAt: new Date(response.last_publication_date).toLocaleDateString(
       "pt-BR",
       {
@@ -58,5 +84,8 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
       }
     ),
   };
-  return { props: { post } };
+  return {
+    props: { post },
+    redirect: 60 * 30, //30 minutes
+  };
 };
